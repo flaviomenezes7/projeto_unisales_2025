@@ -92,9 +92,23 @@ function App() {
     setAtendimentoFinalizado(true);
   };
 
-  const enviarFeedback = (nota) => {
-    setFeedback(nota);
-    // Aqui você pode enviar o feedback para o backend se quiser
+  const enviarFeedback = async () => {
+    try {
+      const resposta = await fetch('http://localhost:5000/api/avaliacao', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nota: feedback,
+          comentario: comentario,
+        }),
+      });
+      if (!resposta.ok) throw new Error('Erro ao enviar avaliação');
+      setFeedbackEnviado(true);
+    } catch (e) {
+      alert('Erro ao enviar avaliação!');
+    }
   };
 
   return (
@@ -158,10 +172,7 @@ function App() {
               />
               <button
                 className="mt-4 bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-                onClick={() => {
-                  // Aqui você pode enviar o feedback e o comentário para o backend se desejar
-                  setFeedbackEnviado(true);
-                }}
+                onClick={enviarFeedback}
                 disabled={!feedback || feedbackEnviado}
               >
                 Enviar avaliação

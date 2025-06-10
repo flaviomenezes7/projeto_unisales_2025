@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import os
 import requests
@@ -16,6 +17,21 @@ CORS(app)  # Habilitar CORS para permitir requisições do frontend
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# Configurações do banco de dados
+# Exemplo de URI para usuário padrão:
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://usuario_teste:flavio123@localhost:5432/integrador'
+# Se criou outro usuário:
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://salesinho_user:SENHA@localhost:5432/integrador'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class Avaliacao(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nota = db.Column(db.Integer, nullable=False)
+    comentario = db.Column(db.String(500))
+    data = db.Column(db.DateTime, default=db.func.current_timestamp())
+
 @app.route('/api/mensagem', methods=['POST'])
 def processar_mensagem():
     """
@@ -32,12 +48,17 @@ def processar_mensagem():
 
         # Prompt detalhado para a IA
         prompt_extra = (
-            "Seu nome é Salesinho, você é um assistente virtual educado, cordial e prestativo da Central de Atendimento da Unisales. "
-            "Responda sempre de forma clara, objetiva e amigável. "
+            "Seu nome é Salesinho, você é um assistente virtual cordial e prestativo da Central de Atendimento da Unisales. "
+            "Responda sempre de forma clara e objetiva. "
             "Seja breve, mas forneça informações completas. "
             "Se não souber a resposta, oriente o usuário a procurar o setor responsável. "
             "Nunca invente informações. "
-            "Seja sempre respeitoso e mantenha o foco em ajudar o estudante da Unisales."
+            "Seja sempre respeitoso e mantenha o foco em ajudar o estudante da Unisales. "
+            "O site da instituição é https://unisales.br/. "
+            "Endereço: Av Vitória, 950, Forte São João - Vitória/ES, CEP: 29017-950. "
+            "Telefone: 27 3331-8500. "
+            "WhatsApp: (27) 9 8123-4566. "
+            "E-mail: comercial@unisales.br."
         )
 
         resposta_ia = gerar_resposta(mensagem_usuario, prompt_extra=prompt_extra)
@@ -47,6 +68,31 @@ def processar_mensagem():
     except Exception as e:
         print(f"Erro: {str(e)}")
         return jsonify({'erro': 'Erro ao processar mensagem'}), 500
+
+@app.route('/api/avaliacao', methods=['POST'])
+def receber_avaliacao():
+    """
+    Recebe uma avaliação do usuário e salva no banco de dados.
+    Espera um JSON com: nota (int) e comentario (str, opcional).
+    """
+    try:
+        dados = request.get_json()
+        nota = dados.get('nota')
+        comentario = dados.get('comentario', '')
+
+        if nota is None:
+            return jsonify({'erro': 'Nota não fornecida'}), 400
+
+        avaliacao = Avaliacao(nota=nota, comentario=comentario)
+        db.session.add(avaliacao)
+        db.session.commit()
+
+        return jsonify({'mensagem': 'Avaliação registrada com sucesso!'}), 201
+
+    except Exception as e:
+        print(f"Erro ao salvar avaliação: {str(e)}")
+        return jsonify({'erro': 'Erro ao registrar avaliação'}), 500
+
 
 def consultar_groq(mensagem):
     """
