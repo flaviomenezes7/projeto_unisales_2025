@@ -6,6 +6,7 @@ import requests
 import json
 from dotenv import load_dotenv
 from groq_ai import gerar_resposta
+import logging
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -20,8 +21,6 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 # Configurações do banco de dados
 # Exemplo de URI para usuário padrão:
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://usuario_teste:flavio123@localhost:5432/integrador'
-# Se criou outro usuário:
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://salesinho_user:SENHA@localhost:5432/integrador'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -41,7 +40,10 @@ def processar_mensagem():
         dados = request.get_json()
         mensagem = dados.get('mensagem', '')
         
+        logging.info(f"Recebida mensagem do usuário: {mensagem}")
+
         if not mensagem:
+            logging.warning("Mensagem não fornecida na requisição.")
             return jsonify({'erro': 'Mensagem não fornecida'}), 400
         
         mensagem_usuario = mensagem
@@ -63,10 +65,12 @@ def processar_mensagem():
 
         resposta_ia = gerar_resposta(mensagem_usuario, prompt_extra=prompt_extra)
         
+        logging.info(f"Resposta gerada pela IA: {resposta_ia}")
+
         return jsonify({'resposta': resposta_ia})
     
     except Exception as e:
-        print(f"Erro: {str(e)}")
+        logging.error(f"Erro ao processar mensagem: {str(e)}")
         return jsonify({'erro': 'Erro ao processar mensagem'}), 500
 
 @app.route('/api/avaliacao', methods=['POST'])
@@ -80,17 +84,22 @@ def receber_avaliacao():
         nota = dados.get('nota')
         comentario = dados.get('comentario', '')
 
+        logging.info(f"Recebida avaliação: nota={nota}, comentario={comentario}")
+
         if nota is None:
+            logging.warning("Nota não fornecida na avaliação.")
             return jsonify({'erro': 'Nota não fornecida'}), 400
 
         avaliacao = Avaliacao(nota=nota, comentario=comentario)
         db.session.add(avaliacao)
         db.session.commit()
 
+        logging.info("Avaliação registrada com sucesso.")
+
         return jsonify({'mensagem': 'Avaliação registrada com sucesso!'}), 201
 
     except Exception as e:
-        print(f"Erro ao salvar avaliação: {str(e)}")
+        logging.error(f"Erro ao salvar avaliação: {str(e)}")
         return jsonify({'erro': 'Erro ao registrar avaliação'}), 500
 
 
@@ -113,7 +122,7 @@ def consultar_groq(mensagem):
     }
     
     payload = {
-        "model": "llama3-8b-8192",  # Modelo da Groq (pode ser alterado conforme disponibilidade)
+        "model": "llama3-8b-8192",  
         "messages": [
             {"role": "system", "content": "Você é um assistente de atendimento ao cliente prestativo, amigável e eficiente. Forneça respostas claras e precisas. Se não souber a resposta, seja honesto e ofereça alternativas de contato."},
             {"role": "user", "content": mensagem}
@@ -124,7 +133,7 @@ def consultar_groq(mensagem):
     
     try:
         resposta = requests.post(GROQ_API_URL, headers=headers, data=json.dumps(payload))
-        resposta.raise_for_status()  # Lança exceção para códigos HTTP de erro
+        resposta.raise_for_status()  
         
         dados = resposta.json()
         texto_resposta = dados["choices"][0]["message"]["content"]
